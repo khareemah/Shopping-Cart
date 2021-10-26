@@ -263,3 +263,8 @@ body {
   color: var(--primaryColor);
   text-align: center;
 }
+@media screen (max-width: 500px) {
+  .banner-title {
+    font-size: 2.5rem;
+  }
+}
