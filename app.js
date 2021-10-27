@@ -1,37 +1,49 @@
-let cart;
-let buttons = [];
-const productDOM = document.querySelector(".products-center");
+// DOM selection
+const productsDOM = document.querySelector(".products-center");
+const cartContent = document.querySelector(".cart-content");
 const cartDOM = document.querySelector(".cart");
 const cartOverlay = document.querySelector(".cart-overlay");
-const closeCart = document.querySelector(".close-cart");
+const closeCartBtn = document.querySelector(".close-cart");
 const cartBtn = document.querySelector(".cart-btn");
-const cartContent = document.querySelector(".cart-content");
-const cartTotal = document.querySelector(".cart-total");
 const cartItems = document.querySelector(".cart-items");
-const clearCart = document.querySelector(".clear-cart");
-// get products
-class Products {
-  async getProducts() {
-    const response = await fetch("./products.json");
-    const data = await response.json();
-    let result = data.items;
-    result = result.map((product) => {
-      const { price, title } = product.fields;
-      const { id } = product.sys;
-      const image = product.fields.image.fields.file.url;
-      return { price, title, id, image };
+const cartTotal = document.querySelector(".cart-total");
+const clearCartBtn = document.querySelector(".clear-cart");
+let cart = [];
+
+function setupApp() {
+  cart = getCart();
+  populateCart();
+  calculateTotal();
+  closeCartBtn.addEventListener("click", closeCart);
+  cartOverlay.addEventListener("click", (e) => {
+    if (e.target.classList.contains("cart-overlay")) {
+      closeCart();
+    }
+  });
+  cartBtn.addEventListener("click", openCart);
+}
+
+async function fetchProducts() {
+  try {
+    const result = await fetch("./products.json");
+    const data = await result.json();
+    let products = data.items;
+    products = products.map((item) => {
+      const { price, title } = item.fields;
+      const image = item.fields.image.fields.file.url;
+      const id = item.sys.id;
+      return { price, title, image, id };
     });
-    return result;
+    return products;
+  } catch (error) {
+    console.log(error);
   }
 }
 
-// setup UI
-class UI {
-  // display products
-  displayProducts(data) {
-    const result = data.map((item) => {
-      const { price, title, id, image } = item;
-      return `<article class="product">
+function displayProducts(products) {
+  const result = products.map((product) => {
+    const { image, title, id, price } = product;
+    return `<article class="product">
           <div class="img-container">
             <img
               src=${image}
@@ -46,45 +58,38 @@ class UI {
           <h3>${title}</h3>
           <h4>$${price}</h4>
         </article>`;
-    });
-    productDOM.innerHTML = result.join("");
-  }
-  getBagButtons() {
-    buttons = [...document.querySelectorAll(".bag-btn")];
-    buttons.forEach((button) => {
-      let buttonId = button.dataset.id;
-      const inCart = cart.find((item) => item.id === buttonId);
-      if (inCart) {
-        button.innerText = "in cart";
-        // button.disabled = true;
-      }
-      button.addEventListener("click", () => {
-        if (inCart) {
-          button.innerText = "in cart";
-          this.openCart();
-          // button.disabled = true;
-        } else {
-          const products = Storage.getProducts();
-          let cartItem = products.find((item) => item.id === buttonId);
-          cartItem = { ...cartItem, amount: 1 };
-          cart = [cartItem, ...cart];
-          Storage.saveCart(cart);
-          button.textContent = "in bag";
-          button.disabled = true;
-          this.addCartItem(cartItem);
-          this.openCart();
-          this.setCartValues();
-        }
-      });
-    });
-  }
+  });
+  productsDOM.innerHTML = result.join("");
+}
 
-  addCartItem(cartItem) {
-    const { image, id, title, price, amount } = cartItem;
-    const div = document.createElement("div");
-    div.classList.add("cart-item");
-    div.innerHTML = `
-            <img src=${image} />
+function getBagButtons() {
+  const buttons = [...document.querySelectorAll(".bag-btn")];
+  buttons.forEach((button) => {
+    const inCart = cart.find((item) => item.id === button.dataset.id);
+    if (inCart) {
+      button.innerText = "in cart";
+      button.disabled = true;
+    }
+    button.addEventListener("click", () => {
+      const products = getProducts();
+      let cartItem = products.find((item) => item.id === button.dataset.id);
+      cartItem = { ...cartItem, amount: 1 };
+      cart = [...cart, cartItem];
+      saveCart(cart);
+      button.disabled = "true";
+      button.innerText = "in bag";
+      addCartItem(cartItem);
+      openCart();
+      calculateTotal();
+    });
+  });
+}
+
+function addCartItem(cartItem) {
+  const { id, image, price, title, amount } = cartItem;
+  const div = document.createElement("div");
+  div.classList.add("cart-item");
+  div.innerHTML = ` <img src=${image} alt="product" />
             <div>
               <h4>${title}</h4>
               <h5>$${price}</h5>
@@ -93,139 +98,127 @@ class UI {
             <div>
               <i class="fas fa-chevron-up" data-id=${id}></i>
               <p class="item-amount">
-               ${amount}
+                ${amount}
               </p>
               <i class="fas fa-chevron-down" data-id=${id}></i>
-            `;
-    cartContent.appendChild(div);
-  }
-
-  openCart() {
-    cartOverlay.classList.add("transparentBcg");
-    cartDOM.classList.add("showCart");
-  }
-
-  closeCart() {
-    cartOverlay.classList.remove("transparentBcg");
-    cartDOM.classList.remove("showCart");
-  }
-  setCartValues() {
-    let totalAmount = 0;
-    let totalItems = 0;
-    cart.forEach((item) => {
-      totalAmount += item.amount * item.price;
-      totalItems += item.amount;
-    });
-    cartTotal.innerText = parseFloat(totalAmount).toFixed(2);
-    cartItems.innerText = totalItems;
-  }
-  populateCart() {
-    cart.forEach((item) => {
-      this.addCartItem(item);
-    });
-  }
-  setupApp() {
-    cart = Storage.getCart();
-    this.populateCart();
-    this.setCartValues();
-    closeCart.addEventListener("click", () => this.closeCart());
-    cartBtn.addEventListener("click", () => this.openCart());
-    cartOverlay.addEventListener("click", (e) => {
-      if (e.target.classList.contains("cart-overlay")) {
-        this.closeCart();
-      }
-    });
-  }
-  cartLogic() {
-    cartOverlay.addEventListener("click", (e) => {
-      if (e.target.classList.contains("clear-cart")) {
-        this.clearCart();
-      } else if (e.target.classList.contains("remove-item")) {
-        const removeItem = e.target;
-        cart = cart.filter((item) => item.id !== removeItem.dataset.id);
-        cartContent.removeChild(removeItem.parentElement.parentElement);
-        const buttons = [...document.querySelectorAll(".bag-btn")];
-        buttons.forEach((button) => {
-          if ((button.dataset.id = removeItem.dataset.id)) {
-            button.innerText = "add to bag";
-            button.disabled = false;
-          }
-        });
-      } else if (e.target.classList.contains("fa-chevron-up")) {
-        const increaseItem = cart.find(
-          (item) => item.id === e.target.dataset.id
-        );
-        increaseItem.amount = increaseItem.amount + 1;
-        e.target.nextElementSibling.innerText = increaseItem.amount;
-      } else if (e.target.classList.contains("fa-chevron-down")) {
-        const decreaseItem = cart.find(
-          (item) => item.id === e.target.dataset.id
-        );
-        decreaseItem.amount = decreaseItem.amount - 1;
-        e.target.previousElementSibling.innerText = decreaseItem.amount;
-
-        if (decreaseItem.amount === 0) {
-          cart = cart.filter((item) => item.id !== e.target.dataset.id);
-          cartContent.removeChild(e.target.parentElement.parentElement);
-          const buttons = [...document.querySelectorAll(".bag-btn")];
-          buttons.forEach((button) => {
-            if (button.dataset.id == e.target.dataset.id) {
-              button.innerText = "add to bag";
-              button.disabled = false;
-            }
-          });
-        }
-      }
-      Storage.saveCart(cart);
-      this.setCartValues();
-    });
-  }
-  clearCart() {
-    cart = [];
-    Storage.saveCart(cart);
-    this.setCartValues();
-    const buttons = [...document.querySelectorAll(".bag-btn")];
-    buttons.forEach((button) => {
-      button.disabled = false;
-      button.innerHTML = `<i class="fas fa-shopping-cart"></i>
-              add to bag`;
-    });
-    while (cartContent.children.length > 0) {
-      cartContent.children[0].remove();
-    }
-  }
+            </div>`;
+  cartContent.appendChild(div);
 }
 
-// save products
+function populateCart() {
+  cart.forEach((item) => {
+    addCartItem(item);
+  });
+}
 
-class Storage {
-  static saveProduct(product) {
-    localStorage.setItem("products", JSON.stringify(product));
+function openCart() {
+  cartDOM.classList.add("showCart");
+  cartOverlay.classList.add("transparentBcg");
+}
+
+function closeCart() {
+  cartDOM.classList.remove("showCart");
+  cartOverlay.classList.remove("transparentBcg");
+}
+
+function calculateTotal() {
+  const total = cart.reduce(
+    (acc, item) => {
+      acc.totalPrice += item.price * item.amount;
+      acc.totalItems += item.amount;
+      return acc;
+    },
+    { totalPrice: 0, totalItems: 0 }
+  );
+  cartItems.innerText = total.totalItems;
+  cartTotal.innerText = total.totalPrice.toFixed(2);
+}
+
+function cartLogic() {
+  clearCartBtn.addEventListener("click", () => {
+    clearCart();
+  });
+  cartContent.addEventListener("click", (e) => {
+    const target = e.target;
+    const id = target.dataset.id;
+    if (target.classList.contains("remove-item")) {
+      removeItem(id, target);
+    } else if (target.classList.contains("fa-chevron-up")) {
+      increaseItem(id, target);
+    } else if (target.classList.contains("fa-chevron-down")) {
+      decreaseItem(id, target);
+    }
+  });
+}
+
+function clearCart() {
+  cart = [];
+  saveCart(cart);
+  calculateTotal();
+  while (cartContent.children.length > 0) {
+    cartContent.removeChild(cartContent.children[0]);
   }
-  static getProducts() {
-    return JSON.parse(localStorage.getItem("products"));
+  const buttons = [...document.querySelectorAll(".bag-btn")];
+  buttons.forEach((button) => {
+    button.disabled = false;
+    button.innerText = "add to bag";
+    button.disabled = false;
+  });
+}
+
+function removeItem(id, target) {
+  cart = cart.filter((item) => item.id !== id);
+  saveCart(cart);
+  cartContent.removeChild(target.parentElement.parentElement);
+  calculateTotal();
+  const buttons = [...document.querySelectorAll(".bag-btn")];
+  buttons.forEach((button) => {
+    if (button.dataset.id === id) button.innerText = "add to bag";
+    button.disabled = false;
+  });
+}
+
+function increaseItem(id, target) {
+  const itemToIncrease = cart.find((item) => item.id == id);
+  itemToIncrease.amount += 1;
+  saveCart(cart);
+  calculateTotal();
+  target.nextElementSibling.innerHTML = itemToIncrease.amount;
+}
+
+function decreaseItem(id, target) {
+  const itemTodecrease = cart.find((item) => item.id == id);
+  itemTodecrease.amount -= 1;
+  target.previousElementSibling.innerHTML = itemTodecrease.amount;
+  if (itemTodecrease.amount === 0) {
+    removeItem(id, target);
   }
-  static saveCart(cart) {
-    localStorage.setItem("cart", JSON.stringify(cart));
-  }
-  static getCart() {
-    return localStorage.getItem("cart")
-      ? JSON.parse(localStorage.getItem("cart"))
-      : [];
-  }
+  saveCart(cart);
+  calculateTotal();
+}
+function saveProducts(products) {
+  localStorage.setItem("products", JSON.stringify(products));
+}
+function getProducts() {
+  return JSON.parse(localStorage.getItem("products"));
+}
+function saveCart(cart) {
+  localStorage.setItem("cart", JSON.stringify(cart));
+}
+function getCart() {
+  return localStorage.getItem("cart")
+    ? JSON.parse(localStorage.getItem("cart"))
+    : [];
 }
 document.addEventListener("DOMContentLoaded", () => {
-  const products = new Products();
-  const ui = new UI();
-  ui.setupApp();
-  products
-    .getProducts()
-    .then((data) => {
-      ui.displayProducts(data);
-      Storage.saveProduct(data);
+  setupApp();
+  fetchProducts()
+    .then((products) => {
+      displayProducts(products);
+      saveProducts(products);
     })
     .then(() => {
-      ui.getBagButtons();
-      ui.cartLogic();
+      getBagButtons();
+      cartLogic();
     });
 });
